@@ -134,6 +134,11 @@ const subCells=i=>{const z=i>>1,r0=i%2?3:0,o=[];for(let r=r0;r<r0+3;r++)for(let 
 const CARDS={scout:"偵察兵",spy:"間諜",radar:"雷達",drone:"無人機",camo:"偽裝網",sat:"紅外線衛星",bomb:"轟炸機",heli:"直升機",carrier:"運兵車",reinf:"增援",missile:"陸軍戰術飛彈"};
 const CORDER=["scout","spy","radar","drone","camo","sat","bomb","heli","carrier","reinf","missile"];
 const DESC={scout:"指定一個小區，下下回合公布那 9 格有什麼；冷卻 3 回合",spy:"隨機暴露對手一門砲的精確格；整局 1 次",radar:"第 18–20 回合：對手火箭砲開火那回合，顯示它移動的方向和格數；整局 1 次",drone:"隨機查出對手一門迫擊砲所在的小區，當回合結算；冷卻 3 回合",camo:"本回合擋掉對手的偵察兵、間諜、無人機、雷達；整局 2 次，隔一回合可再用",sat:"第 19–20 回合：顯示對手所有砲的精確位置，擋不住；整局 1 次",bomb:"選起點和方向，炸一條 6 格的線；冷卻 10 回合",heli:"把一門迫擊砲或將軍送到己方任意空格；迫擊砲本回合和下回合不能開火；冷卻 5 回合",carrier:"同直升機，但只能在同一顏色大區內；冷卻 5 回合",reinf:"原來 3 門迫擊砲全毀後，第 1–10 回合內增加 1 門迫擊砲；整局 1 次",missile:"第 11 回合強制：炸 3×3，那 9 格成為永久廢墟"};
+const msT=t=>G.easy?(t%3==0&&t<=18):t==11;
+const cnt0=o=>({M:3,H:2,R:G.easy&&o==0?2:1});
+const qFor=p=>G.easy&&p==0?[...Q,"R","G"]:[...QG];
+const EDESC={scout:"指定一個小區，下下回合公布那 9 格有什麼；用一次要休息 1 回合",bomb:"選起點和方向，炸一條 6 格的線；沒有冷卻，每回合都能放",radar:"第 4 回合起：對手火箭砲開火那回合，顯示它移動的方向和格數；整局 1 次",sat:"第 4 回合起：顯示對手所有砲的精確位置，擋不住；整局 1 次",heli:"把一門迫擊砲或將軍送到己方任意空格；沒有冷卻",carrier:"同直升機，但只能在同一顏色大區內；沒有冷卻",missile:"第 3、6、9、12、15、18 回合強制：自己選位置，炸 3×3，那 9 格成為永久廢墟"};
+const descOf=k=>G.easy&&EDESC[k]?EDESC[k]:DESC[k];
 const DIRV={U:[1,0],D:[-1,0],L:[0,-1],R:[0,1]},DIRS={U:"往上",D:"往下",L:"往左",R:"往右"};
 const $=s=>document.querySelector(s);
 const lab=(r,c)=>String.fromCharCode(65+r)+(c+1);
@@ -162,7 +167,7 @@ const SFX={selM(){tone(880,.08,"triangle",.1,0,660)},selH(){tone(110,.18,"triang
  missile(){noise(1.5,.3,0,2800,"highpass");tone(300,1,"sawtooth",.12,0,900);noise(2.2,.6,.9,260);tone(40,2,"sine",.5,.9,22)}};
 const sfx=n=>{try{SFX[n]()}catch(e){}};
 
-function init(){G={turn:1,ph:"start",p:0,units:[[],[]],marks:[mk(),mk()],xt:[mkn(),mkn()],plans:[{},{}],log:[],queue:[...QG],next:null,over:null,mode:"pvp",diff:0,lost:[{M:0,H:0,R:0},{M:0,H:0,R:0}],seen:[[],[]],cards:[newCards(),newCards()],cp:[{},{}],ruin:[mkb(),mkb()],inbox:[[],[]],rev:[[],[]],pend:[[],[]],events:[],hist:[],cardlog:[[],[]],spot:[[],[]],noAnim:false};UI={sel:null,mode:null,cm:null,msg:""}}
+function init(){G={turn:1,ph:"start",p:0,units:[[],[]],marks:[mk(),mk()],xt:[mkn(),mkn()],plans:[{},{}],log:[],queue:[...QG],next:null,over:null,mode:"pvp",diff:0,lost:[{M:0,H:0,R:0},{M:0,H:0,R:0}],seen:[[],[]],cards:[newCards(),newCards()],cp:[{},{}],ruin:[mkb(),mkb()],inbox:[[],[]],rev:[[],[]],pend:[[],[]],events:[],hist:[],cardlog:[[],[]],easy:false,spot:[[],[]],noAnim:false};UI={sel:null,mode:null,cm:null,msg:""}}
 const unitAt=(p,r,c)=>G.units[p].find(u=>u.alive&&u.r==r&&u.c==c);
 const selUnit=()=>G.units[G.p].find(u=>u.id==UI.sel&&u.alive);
 const plan=u=>G.plans[G.p][u.id]||(G.plans[G.p][u.id]={});
@@ -195,15 +200,16 @@ const DN=["簡單","中等","困難"],pn=p=>G.mode=="cpu"&&p==1?"電腦":"玩家
 /* ===== 卡片可用性：返回空字符串表示現在可以用 ===== */
 function cardWhy(p,k){
  const t=G.turn,K=G.cards[p],cd=(last,n)=>{const w=n-(t-last);return w>0?"冷卻中，還需 "+w+" 回合":""};
- if(k=="scout"||k=="drone")return cd(K[k],3);
+ if(k=="scout")return cd(K[k],G.easy?2:3);
+ if(k=="drone")return cd(K[k],3);
  if(k=="camo"){if(K.camoN>=2)return"兩次已用完";const w=2-(t-K.camo);return w>0?"休息中，還需 "+w+" 回合":""}
- if(k=="bomb")return cd(K.bomb,10);
- if(k=="heli"||k=="carrier"){const w=cd(K[k],5);if(w)return w;return G.units[p].some(u=>u.alive&&(u.t=="M"||u.t=="G"))?"":"沒有可運的單位"}
+ if(k=="bomb")return G.easy?"":cd(K.bomb,10);
+ if(k=="heli"||k=="carrier"){const w=G.easy?"":cd(K[k],5);if(w)return w;return G.units[p].some(u=>u.alive&&(u.t=="M"||u.t=="G"))?"":"沒有可運的單位"}
  if(k=="spy")return K.spy?"已用過":"";
- if(k=="radar")return K.radar?"已用過":(t<18?"第 18 回合起才能用":"");
- if(k=="sat")return K.sat?"已用過":(t<19?"第 19 回合起才能用":"");
+ if(k=="radar")return K.radar?"已用過":(t<(G.easy?4:18)?"第 "+(G.easy?4:18)+" 回合起才能用":"");
+ if(k=="sat")return K.sat?"已用過":(t<(G.easy?4:19)?"第 "+(G.easy?4:19)+" 回合起才能用":"");
  if(k=="reinf"){if(K.reinf)return"已用過";if(t>10)return"第 11 回合起不能再用";if(G.lost[p].M<3)return"原來 3 門迫擊砲全毀後才能用";return""}
- if(k=="missile")return K.missile?"已發射":(t==11?"":"只在第 11 回合")
+ if(k=="missile")return G.easy?(msT(t)?"":"只在第 3、6、9、12、15、18 回合"):(K.missile?"已發射":(t==11?"":"只在第 11 回合"))
  return""}
 /* 運輸 / 增援的落點是否可用（己方半場的格子） */
 function destFree(p,r,c){
@@ -213,7 +219,7 @@ function destFree(p,r,c){
  const cp=G.cp[p];if(["heli","carrier"].some(k=>cp[k]&&cp[k].r==r&&cp[k].c==c))return"那一格已是運輸目的地。";
  return""}
 function planBlock(){const p=G.p,cp=G.cp[p],n=left();
- if(G.turn==11&&!cp.missile)return"先選陸軍戰術飛彈目標";
+ if(msT(G.turn)&&!cp.missile)return"先選陸軍戰術飛彈目標";
  if(cp.bomb&&cp.bomb.r==null)return"轟炸機還沒選起點";
  for(const k of["heli","carrier"])if(cp[k]&&cp[k].r==null)return CARDS[k]+"還沒選好";
  if(n)return"還有 "+n+" 門砲未鎖定";return""}
@@ -319,7 +325,7 @@ function flash(m){UI.msg=m;render();UI.msg=""}
 
 /* ===== 已知對手位置（開火暴露標記，保留到那門砲被擊毀） ===== */
 function known(p){
- const L=G.lost[1-p],rem={M:3-L.M,H:2-L.H,R:1-L.R},ex=G.seen[p],last=(a,n)=>n>0?a.slice(-n):[];
+ const L=G.lost[1-p],c0=cnt0(1-p),rem={M:c0.M-L.M,H:c0.H-L.H,R:c0.R-L.R},ex=G.seen[p],last=(a,n)=>n>0?a.slice(-n):[];
  const dd=(arr,key)=>{const m=new Map();arr.forEach(e=>{const k=key(e);m.delete(k);m.set(k,e)});return[...m.values()]};
  return{M:last(dd(ex.filter(e=>e.t=="M"),e=>e.c0),rem.M),H:last(dd(ex.filter(e=>e.t=="H"),e=>e.c0+","+e.r0),rem.H),R:last(ex.filter(e=>e.t=="R"),rem.R)}}
 function markers(p,exm,tagm){
@@ -379,6 +385,7 @@ function sheetHTML(){
  else if(UI.sheet=="log"){ttl="📋 上回合公布";body=(G.log.length?G.log.map(x=>`<p>${x}</p>`).join(""):'<p class="mut">尚無</p>')}
  else if(UI.sheet=="info"){ttl="📡 情報（只顯示這一回合）";const a=[...G.inbox[p],...G.rev[p].map(r=>r.text)];body=a.length?a.map(x=>`<p>${x}</p>`).join(""):'<p class="mut">這回合沒有新情報。</p>'}
  else if(UI.sheet=="help"){ttl="❓ 圖例與提醒";body=`<p><b>棋盤</b>：上面是對手的陣地（F 在上，A 靠中線），下面是你的陣地。距離 = 橫差 + 縱差，按整張圖算。</p><p><b>紅色標記</b> = 已知的對手位置：火箭砲標在精確的格子，榴彈砲標小區，迫擊砲標大區；閃爍的是上回合新暴露的，會保留到那門砲被擊毀。</p><p><b>藍色</b> = 卡片情報，只顯示一回合。</p><p><b>黃色條紋</b> = 已選的目標，● 表示已安排，✓ 表示已鎖定，黃框 = 射程內。</p><p><b>·</b> 白點 = 打過但落空，保留 3 回合；<b>♥</b> = 打中了將軍（保留 3 回合）。焦黑格 = 永久廢墟。</p><p><b>金色「將」</b> = 你的將軍，他上下左右四格會塗<b>淡金色</b>（只在你自己的棋盤），站在那裡的砲吃到相鄰加成。自己的砲或將軍<b>變紅字</b> = 這回合被對手的卡片查到了，下回合恢復。</p><p class="mut">被偽裝網擋住的卡也算用掉；同一回合只能用一張運輸卡。</p>`}
+ else if(UI.sheet=="sur"){ttl="🏳 投降";body=`<p>確定要投降嗎？這一局會結束，回到主畫面重新選擇模式。</p><div class="row"><button data-a="shclose">繼續作戰</button><button class="main grow" data-a="surok">確定投降</button></div>`}
  else if(UI.sheet=="rules"){ttl="📜 規則速覽";body=RULES_HTML}
  else if(UI.sheet=="rphelp"){ttl="❓ 重播圖例";body=`<p>藍框 = ${who(0)}的砲，紅框 = ${who(1)}的砲；上面那塊是${who(1)}的陣地（F 在上），下面是${who(0)}的陣地。</p><p><b>橙色框</b> = 開火的砲，<b>黃色條紋</b> = 目標，<b>紅色</b> = 被擊中，<b>虛線 ○</b> = 移動前的位置，<b>綠框</b> = 移動後的位置，焦黑格 = 廢墟。</p><p class="mut">重播裡雙方的砲全部公開。可以播放、暫停、上一步、下一步，也能拖動進度條或跳到任一回合。</p>`}
  return`<div class="sheet"><div class="sh-in"><div class="sh-h"><span>${ttl}</span><button class="sm" data-a="shclose">✕ 關閉</button></div><div class="sh-b">${body}</div></div></div>`}
@@ -388,7 +395,7 @@ function cardsHTML(){
  CORDER.forEach(k=>{
   const v=cp[k],has=v!==undefined&&v!==false,act=has||UI.cm==k;let st="",btn="";
   if(k=="missile"){
-   if(t==11){st=cp.missile?"已鎖定：以 "+lab(cp.missile.r,cp.missile.c)+" 為中心的 3×3":'<span class="warn">必須使用：回到棋盤，點對手陣地選 3×3 的中心格</span>';btn=cp.missile?'<button class="sm" data-a="cuse" data-k="missile">重選</button>':'<button class="sm" data-a="cuse" data-k="missile">去選目標</button>'}
+   if(msT(t)){st=cp.missile?"已鎖定：以 "+lab(cp.missile.r,cp.missile.c)+" 為中心的 3×3":'<span class="warn">必須使用：回到棋盤，點對手陣地選 3×3 的中心格</span>';btn=cp.missile?'<button class="sm" data-a="cuse" data-k="missile">重選</button>':'<button class="sm" data-a="cuse" data-k="missile">去選目標</button>'}
    else st=`<span class="mut">${cardWhy(p,k)}</span>`}
   else if(act){
    if(k=="scout"){st=cp.scout!==undefined?"已安排：偵察 "+SUBN[cp.scout]+"（下下回合公布）":"選一個小區：";if(cp.scout===undefined)btn=SUBN.map((n,i)=>`<button class="sm" data-a="csub" data-i="${i}">${n}</button>`).join("")}
@@ -399,7 +406,7 @@ function cardsHTML(){
    btn+=`<button class="sm" data-a="ccancel" data-k="${k}">取消</button>`}
   else{const why=cardWhy(p,k)||((k=="heli"||k=="carrier")&&trSel?"本回合已選另一張運輸卡":"");
    if(why)st=`<span class="mut">${why}</span>`;else{st="可用";btn=`<button class="sm" data-a="cuse" data-k="${k}">使用</button>`}}
-  h+=`<div class="crd"><div><b>${CARDS[k]}</b> <span class="mut">${DESC[k]}</span></div><div class="cs">${st} ${btn}</div></div>`});
+  h+=`<div class="crd"><div><b>${CARDS[k]}</b> <span class="mut">${descOf(k)}</span></div><div class="cs">${st} ${btn}</div></div>`});
  return h+'<p class="mut">被偽裝網擋住的卡也算用掉；同一回合只能用一張運輸卡。</p>'}
 
 function dockPlan(){
@@ -411,7 +418,7 @@ function dockPlan(){
   else if(k=="bomb"){const bb=cpl.bomb||{d:"U"};st="<b>轟炸機</b>：點對手陣地選起點"+(bb.r!=null?"（已選 "+lab(bb.r,bb.c)+"）":"")+"，再選方向";ctl=Object.keys(DIRV).map(d=>`<button class="sm" data-a="cdir" data-d="${d}" ${bb.d==d?"disabled":""}>${DIRS[d]}</button>`).join("")+cancel("bomb")}
   else if(k=="heli"||k=="carrier"){const mu=x.id!=null?G.units[p].find(q=>q.id==x.id):null;st="<b>"+CARDS[k]+"</b>："+(!mu?"點自己陣地上要運送的迫擊砲或將軍":NAME[mu.t]+" "+lab(mu.r,mu.c)+" → 點自己半場的空格"+(k=="carrier"?"（同一顏色大區內）":""));ctl=cancel(k)}
   else if(k=="reinf"){st="<b>增援</b>：點自己半場的空格，放置新迫擊砲";ctl=cancel("reinf")}
-  else if(k=="missile"){st='<span class="warn"><b>第 11 回合</b>：點對手陣地選陸軍戰術飛彈的 3×3 中心格（必須）</span>';ctl=""}}
+  else if(k=="missile"){st='<span class="warn"><b>第 '+G.turn+' 回合</b>：點對手陣地選陸軍戰術飛彈的 3×3 中心格（必須）</span>';ctl=""}}
  else if(u){
   const pl=G.plans[p][u.id]||{},L=!!pl.lock,tr=(cpl.heli&&cpl.heli.id==u.id)||(cpl.carrier&&cpl.carrier.id==u.id),b=(a,t,on=true)=>`<button class="sm" data-a="${a}" ${on&&!L?"":"disabled"}>${t}</button>`;let s,bs="";
   if(u.t=="G"){s=tr?"運輸中：本回合不能自己移動":"無攻擊力，可移 2 格｜愛心 "+u.hp+"/5｜相鄰的砲免休息";bs=b("move","移動 ≤2 格",!tr)}
@@ -499,8 +506,8 @@ async function startAnim(){
  if(ok())finishAnim()}
 
 function startHTML(){
- return`<div class="scr"><div class="top"><span class="tt"></span>${muteBtn()}</div><div class="mainb scroll" data-nb="0"><div class="hero"><div class="crest">★ ★ ★</div><h1 class="ttl">毀滅彈道</h1><div class="sub">兩人砲兵對戰</div><span class="tick tl">A1</span><span class="tick br">F9</span></div><div class="box"><p style="margin:0;font-size:14px">目標：<b>擊毀對手所有的砲，或打光將軍的 5 顆愛心</b>。每人迫擊砲 3、榴彈砲 2、火箭砲 1，另有一位不能攻擊的將軍；隔著中線同時秘密下令，開火會暴露位置，另有 11 張卡片可用。</p></div><div class="sec">選擇作戰模式</div><button class="main wide" data-a="start" data-m="pvp">⚔ 雙人對戰<span>同一台裝置輪流</span></button><p class="mut" style="margin:2px 0">對電腦：電腦只用公開資訊（你開火時暴露的區域、命中結果、卡片情報），不會偷看你的佈陣。</p><div class="row3"><button data-a="start" data-m="cpu" data-d="0"><b>★</b><br>簡單</button><button data-a="start" data-m="cpu" data-d="1"><b>★★</b><br>中等</button><button data-a="start" data-m="cpu" data-d="2"><b>★★★</b><br>困難</button></div><div class="row2"><button data-a="tut">📖 新手教學</button><button data-a="shrules">📜 規則速覽</button></div></div></div>`+sheetHTML()}
-const RULES_HTML=`<p>迫擊砲：射程 8，打 1 格，開火後可移 1 格，但移動後下回合不能開火。榴彈砲：射程 10，打 2×2，固定陣地；裝填、發射、準備共 3 回合一循環。火箭砲：全圖，十字 5 格，6 發，開火後可移 3 格，補彈要退到 E/F 排停 2 回合補到 4 發。距離 = 橫差 + 縱差。開火會暴露位置：迫擊砲報大區，榴彈砲報小區，火箭砲報精確格。20 回合到比剩餘砲數。</p><p>將軍：沒有攻擊力，5 顆愛心，每回合可移 2 格，也能被直升機、運兵車運送。每一發不同的攻擊命中將軍所在的格子就扣 1 顆（同一發攻擊只算 1 顆），愛心歸零或被陸軍戰術飛彈打中就陣亡，<b>將軍陣亡等於輸</b>。將軍上下左右相鄰的迫擊砲不用休息（移動後下回合仍可開火），相鄰的榴彈砲可跳過「準備」，裝填、發射兩回合一循環。</p><p>另有 11 張卡片：偵察兵、間諜、雷達、無人機、偽裝網、紅外線衛星、轟炸機、直升機、運兵車、增援，以及第 11 回合雙方強制各打一發的陸軍戰術飛彈。雙方一開始就全部擁有，各自受冷卻和次數限制。</p>`;
+ return`<div class="scr"><div class="top"><span class="tt"></span>${muteBtn()}</div><div class="mainb scroll" data-nb="0"><div class="hero"><div class="crest">★ ★ ★</div><h1 class="ttl">毀滅彈道</h1><div class="sub">兩人砲兵對戰</div><span class="tick tl">A1</span><span class="tick br">F9</span></div><div class="box"><p style="margin:0;font-size:14px">目標：<b>擊毀對手所有的砲，或打光將軍的 5 顆愛心</b>。每人迫擊砲 3、榴彈砲 2、火箭砲 1，另有一位不能攻擊的將軍；隔著中線同時秘密下令，開火會暴露位置，另有 11 張卡片可用。</p></div><div class="sec">選擇作戰模式</div><button class="main wide" data-a="start" data-m="pvp">⚔ 雙人對戰<span>同一台裝置輪流</span></button><p class="mut" style="margin:2px 0">對電腦：電腦只用公開資訊（你開火時暴露的區域、命中結果、卡片情報），不會偷看你的佈陣。</p><div class="row3"><button data-a="start" data-m="cpu" data-d="0"><b>★</b><br>簡單</button><button data-a="start" data-m="cpu" data-d="1"><b>★★</b><br>中等</button><button data-a="start" data-m="cpu" data-d="2"><b>★★★</b><br>困難</button></div><button class="main wide" data-a="start" data-m="cpu" data-d="1" data-e="1">🎮 輕鬆模式<span>你有兩門火箭砲</span></button><div class="row2"><button data-a="tut">📖 新手教學</button><button data-a="shrules">📜 規則速覽</button></div></div></div>`+sheetHTML()}
+const RULES_HTML=`<p>迫擊砲：射程 8，打 1 格，開火後可移 1 格，但移動後下回合不能開火。榴彈砲：射程 10，打 2×2，固定陣地；裝填、發射、準備共 3 回合一循環。火箭砲：全圖，十字 5 格，6 發，開火後可移 3 格，補彈要退到 E/F 排停 2 回合補到 4 發。距離 = 橫差 + 縱差。開火會暴露位置：迫擊砲報大區，榴彈砲報小區，火箭砲報精確格。20 回合到比剩餘砲數。</p><p>將軍：沒有攻擊力，5 顆愛心，每回合可移 2 格，也能被直升機、運兵車運送。每一發不同的攻擊命中將軍所在的格子就扣 1 顆（同一發攻擊只算 1 顆），愛心歸零或被陸軍戰術飛彈打中就陣亡，<b>將軍陣亡等於輸</b>。將軍上下左右相鄰的迫擊砲不用休息（移動後下回合仍可開火），相鄰的榴彈砲可跳過「準備」，裝填、發射兩回合一循環。</p><p>輕鬆模式（只在對電腦）：你有 2 門火箭砲，電腦 1 門；偵察隔回合可用，轟炸機、直升機、運兵車沒有冷卻，雷達和衛星第 4 回合開放，陸軍戰術飛彈在第 3、6、9、12、15、18 回合強制發射（位置自選）。</p><p>另有 11 張卡片：偵察兵、間諜、雷達、無人機、偽裝網、紅外線衛星、轟炸機、直升機、運兵車、增援，以及第 11 回合雙方強制各打一發的陸軍戰術飛彈。雙方一開始就全部擁有，各自受冷卻和次數限制。</p>`;
 
 function render(){
  const p=G.p,A=$("#app");let h="";
@@ -508,10 +515,10 @@ function render(){
  else if(G.ph=="pass")h=`<div class="pass"><h2>請交給玩家 ${G.next.p+1}</h2><p>確認旁人看不到螢幕後再點開始。</p><button data-a="go">我是玩家 ${G.next.p+1}，開始</button></div>`;
  else if(G.ph=="setup")h=shell(`<span class="tt">${G.mode=="cpu"?"佈陣（電腦會自己佈陣）":"玩家 "+(p+1)+" 佈陣"}</span>${muteBtn()}`,board("m"),`<div class="st">點自己這一邊的格子依次放置${G.queue.length?"：下一門是 <b>"+NAME[G.queue[0]]+"</b>":"，已全部放好"}。點已放的砲可取回。A 排最靠近中線。</div><div class="row"><button data-a="rand">隨機佈陣</button><button class="main grow" data-a="done" ${G.queue.length?"disabled":""}>確認佈陣</button></div>`,1);
  else if(G.ph=="plan"){
-  const cpl=G.cp[p];if(G.turn==11&&!cpl.missile&&UI.cm!="missile"&&!UI.sheet)UI.cm="missile";
+  const cpl=G.cp[p];if(msT(G.turn)&&!cpl.missile&&UI.cm!="missile"&&!UI.sheet)UI.cm="missile";
   const nInfo=G.inbox[p].length+G.rev[p].length;
   if(nInfo&&UI.infoSeen!==G.turn+":"+p){UI.infoSeen=G.turn+":"+p;UI.sheet="info"}
-  const top=`<span class="tt">第 ${G.turn}/20 回合 · ${G.mode=="cpu"?"對電腦（"+DN[G.diff]+"）":"玩家 "+(p+1)}</span><button data-a="shinfo">📡${nInfo?`<span class="badge">${nInfo}</span>`:""}</button><button data-a="shlog">📋</button><button data-a="shhelp">❓</button>${muteBtn()}`;
+  const top=`<span class="tt">第 ${G.turn}/20 回合 · ${G.mode=="cpu"?"對電腦（"+DN[G.diff]+"）":"玩家 "+(p+1)}</span><button data-a="shinfo">📡${nInfo?`<span class="badge">${nInfo}</span>`:""}</button><button data-a="shlog">📋</button><button data-a="shhelp">❓</button><button data-a="shsur">🏳</button>${muteBtn()}`;
   h=shell(top,board("e")+'<div class="mid">中線</div>'+board("m"),dockPlan(),2)+sheetHTML()}
  else if(G.ph=="result")h=resultHTML();
  else if(G.ph=="tut")h=tutHTML();
@@ -524,17 +531,18 @@ function act(a,el){
  if(a=="skip"){ANIM.id++;finishAnim();return}
  if(extraAct(a,el))return;
  if(a=="shclose"){UI.sheet=null;return render()}
- if(a=="shcards"||a=="shlog"||a=="shinfo"||a=="shhelp"||a=="shrules"){UI.sheet={shcards:"cards",shlog:"log",shinfo:"info",shhelp:"help",shrules:"rules"}[a];if(a=="shrules"){}return render()}
- if(a=="start"){G.mode=el.dataset.m;G.diff=+el.dataset.d||0;G.ph="setup";G.p=0;return render()}
- if(a=="rand"){G.units[p]=[];G.queue=[...QG];while(G.queue.length){const t=G.queue.shift();let r,c;do{r=Math.floor(Math.random()*R);c=Math.floor(Math.random()*C)}while(unitAt(p,r,c));G.units[p].push({id:++ID,t,r,c,alive:true,noFire:false,st:0,tgt:null,ammo:6,rs:0,hp:5})}return render()}
+ if(a=="shcards"||a=="shlog"||a=="shinfo"||a=="shhelp"||a=="shrules"||a=="shsur"){UI.sheet={shsur:"sur",shcards:"cards",shlog:"log",shinfo:"info",shhelp:"help",shrules:"rules"}[a];if(a=="shrules"){}return render()}
+ if(a=="start"){G.mode=el.dataset.m;G.diff=+el.dataset.d||0;G.easy=!!el.dataset.e;G.queue=qFor(0);G.ph="setup";G.p=0;return render()}
+ if(a=="rand"){G.units[p]=[];G.queue=qFor(p);while(G.queue.length){const t=G.queue.shift();let r,c;do{r=Math.floor(Math.random()*R);c=Math.floor(Math.random()*C)}while(unitAt(p,r,c));G.units[p].push({id:++ID,t,r,c,alive:true,noFire:false,st:0,tgt:null,ammo:6,rs:0,hp:5})}return render()}
  if(a=="done"){if(G.queue.length)return;if(G.mode=="cpu"){cpuSetup(1,G.diff);G.ph="plan";G.p=0;UI={sel:null,mode:null,cm:null,msg:"",sheet:null};return render()}G.ph="pass";G.next=p==0?{ph:"setup",p:1}:{ph:"plan",p:0};if(p==0)G.queue=[...QG];return render()}
  if(a=="go"){G.ph=G.next.ph;G.p=G.next.p;UI={sel:null,mode:null,cm:null,msg:"",sheet:null};return render()}
  if(a=="confirm"){if(planBlock())return;UI.cm=null;UI.sheet=null;if(p==0&&G.mode=="cpu"){cpuPlan(1,G.diff);resolve()}else if(p==0){G.ph="pass";G.next={ph:"plan",p:1}}else resolve();return render()}
  if(a=="cont"){G.turn++;UI.sheet=null;if(G.mode=="cpu"){G.ph="plan";G.p=0;UI={sel:null,mode:null,cm:null,msg:"",sheet:null}}else{G.ph="pass";G.next={ph:"plan",p:0}}return render()}
+ if(a=="surok"){init();UI.sheet=null;return render()}
  if(a=="again"){init();UI.sheet=null;return render()}
  /* 卡片 */
  if(a=="cuse"){const k=el.dataset.k;
-  if(G.turn==11&&!cpl.missile&&k!="missile")return flash("第 11 回合：先鎖定陸軍戰術飛彈的目標。");
+  if(msT(G.turn)&&!cpl.missile&&k!="missile")return flash("第 "+G.turn+" 回合：先鎖定陸軍戰術飛彈的目標。");
   const why=cardWhy(p,k);if(why)return flash(why);
   if((k=="heli"||k=="carrier")&&(cpl.heli||cpl.carrier)&&UI.cm!=k)return flash("同一回合只能用一張運輸卡。");
   sfx("card");UI.sel=null;UI.mode=null;
@@ -567,7 +575,7 @@ function clickMine(r,c){
   else if(G.queue.length){G.units[p].push({id:++ID,t:G.queue.shift(),r,c,alive:true,noFire:false,st:0,tgt:null,ammo:6,rs:0,hp:5})}
   return render()}
  const cpl=G.cp[p];
- if(G.turn==11&&!cpl.missile)return flash("第 11 回合：先鎖定陸軍戰術飛彈的目標。");
+ if(msT(G.turn)&&!cpl.missile)return flash("第 "+G.turn+" 回合：先鎖定陸軍戰術飛彈的目標。");
  if(UI.cm=="heli"||UI.cm=="carrier"){const x=cpl[UI.cm];
   if(hit){if(hit.t!="M"&&hit.t!="G")return flash("運輸卡只能運迫擊砲或將軍。");x.id=hit.id;x.r=null;x.c=null;delete G.plans[p][hit.id];return render()}
   if(x.id==null)return flash("先點選要運送的迫擊砲。");
@@ -590,7 +598,7 @@ function clickEnemy(r,c){
  const p=G.p,cpl=G.cp[p];
  if(UI.cm=="bomb"&&cpl.bomb){cpl.bomb.r=r;cpl.bomb.c=c;sfx("tick");return render()}
  if(UI.cm=="missile"){cpl.missile={r,c};UI.cm=null;sfx("tick");return render()}
- if(G.turn==11&&!cpl.missile)return flash("第 11 回合：先鎖定陸軍戰術飛彈的目標。");
+ if(msT(G.turn)&&!cpl.missile)return flash("第 "+G.turn+" 回合：先鎖定陸軍戰術飛彈的目標。");
  const u=selUnit();if(!u||(UI.mode!="fire"&&UI.mode!="load"))return;if((G.plans[G.p][u.id]||{}).lock)return flash("這門砲已鎖定，不能再修改。");
  const cells=cellsFor(u,r,c);
  if(!cells)return flash("2×2 方塊超出棋盤邊緣。");
@@ -783,12 +791,12 @@ function cpuSetup(p,d){
  const put=(t,rs,cs)=>{let r,c,k=0;do{r=pick(rs);c=pick(cs);k++}while(used.has(r+","+c)&&k<500);used.add(r+","+c);G.units[p].push({id:++ID,t,r,c,alive:true,noFire:false,st:0,tgt:null,ammo:6,rs:0,hp:5})};
  const putG=()=>{const gs=G.units[p].filter(u=>u.t=="M"||u.t=="H");let cs=[];if(d>0)gs.forEach(u=>[[1,0],[-1,0],[0,1],[0,-1]].forEach(([a,b])=>{const r=u.r+a,c=u.c+b;if(r>=0&&r<R&&c>=0&&c<C&&!used.has(r+","+c)&&(d==2?r>=2:true))cs.push([r,c])}));
   if(cs.length&&(d==2||Math.random()<.6)){const[r,c]=pick(cs);used.add(r+","+c);G.units[p].push({id:++ID,t:"G",r,c,alive:true,noFire:false,st:0,tgt:null,ammo:6,rs:0,hp:5})}else put("G",d==0?rg(0,5):rg(2,5),all)};
- if(d==0){Q.forEach(t=>put(t,rg(0,5),all));putG()}
- else if(d==1){Q.forEach(t=>put(t,t=="M"?rg(0,3):t=="H"?rg(1,4):rg(3,5),all));putG()}
- else{const z=shuf([0,1,2]);put("H",rg(1,3),cols(z[0]));put("H",rg(1,3),cols(z[1]));put("R",rg(4,5),all);shuf([0,1,2]).forEach(k=>put("M",rg(0,2),cols(k)));putG()}}
+ if(d==0){qFor(p).filter(t=>t!="G").forEach(t=>put(t,rg(0,5),all));putG()}
+ else if(d==1){qFor(p).filter(t=>t!="G").forEach(t=>put(t,t=="M"?rg(0,3):t=="H"?rg(1,4):rg(3,5),all));putG()}
+ else{const z=shuf([0,1,2]);put("H",rg(1,3),cols(z[0]));put("H",rg(1,3),cols(z[1]));put("R",rg(4,5),all);if(G.easy&&p==0)put("R",rg(4,5),all);shuf([0,1,2]).forEach(k=>put("M",rg(0,2),cols(k)));putG()}}
 
 function aiHeat(p,d){
- const L=G.lost[1-p],rem={M:3-L.M,H:2-L.H,R:1-L.R},mk1=G.marks[p],now=G.turn,ex=G.seen[p],last=(a,n)=>n>0?a.slice(-n):[];
+ const L=G.lost[1-p],c0=cnt0(1-p),rem={M:c0.M-L.M,H:c0.H-L.H,R:c0.R-L.R},mk1=G.marks[p],now=G.turn,ex=G.seen[p],last=(a,n)=>n>0?a.slice(-n):[];
  const add=Array.from({length:R},()=>Array(C).fill(0)),zero=new Set();
  last(ex.filter(e=>e.t=="M"),rem.M).forEach(e=>{const w=3*Math.pow(.8,Math.max(0,now-e.turn-1));for(let r=0;r<R;r++)for(let c=e.c0;c<=e.c1;c++)add[r][c]+=w});
  const sk={},hs=[];ex.filter(e=>e.t=="H").forEach(e=>{const k=e.c0+","+e.r0;if(!sk[k]){sk[k]=1;hs.push(e)}});
@@ -811,12 +819,12 @@ function cpuPlan(p,d){
  const t=G.turn,o=1-p,P=G.plans[p]={},cp=G.cp[p]={};
  const h=d?aiHeat(p,d):null,pen=d==2?.15:.5,dests=new Set();
  const free=(r,c)=>!G.ruin[p][r][c]&&!G.units[p].some(x=>x.alive&&x.r==r&&x.c==c)&&!dests.has(r+","+c);
- const L=G.lost[o],eRem={M:Math.max(0,3-L.M),H:Math.max(0,2-L.H),R:Math.max(0,1-L.R)},eTot=eRem.M+eRem.H+eRem.R;
+ const L=G.lost[o],eRem={M:Math.max(0,cnt0(o).M-L.M),H:Math.max(0,cnt0(o).H-L.H),R:Math.max(0,cnt0(o).R-L.R)},eTot=eRem.M+eRem.H+eRem.R;
  const kn=known(p),knN=kn.M.length+kn.H.length+kn.R.length,ok=k=>!cardWhy(p,k);
  const sumHeat=cells=>cells.reduce((s,[a,b])=>s+(h?h[a][b]:1),0);
  const notRuin=cells=>cells.filter(([a,b])=>!G.ruin[o][a][b]);
  /* 第 11 回合：強制陸軍戰術飛彈 */
- if(t==11&&ok("missile")){let best={r:rnd(R),c:rnd(C)};
+ if(msT(t)&&ok("missile")){let best={r:rnd(R),c:rnd(C)};
   if(h){let bs=-1;for(let r=0;r<R;r++)for(let c=0;c<C;c++){const s=sumHeat(notRuin(blk3({r,c})))*(1+Math.random()*.001);if(s>bs){bs=s;best={r,c}}}}
   cp.missile=best;if(h)blk3(best).forEach(([a,b])=>h[a][b]*=pen)}
  /* 增援：原來的迫擊砲全毀後立刻用 */
@@ -837,7 +845,7 @@ function cpuPlan(p,d){
  if(ok("spy")){const u=d==0?Math.random()<.08:d==1?(eTot-knN>=3&&Math.random()<.5):(eTot<=2||(t>=8&&knN<=1));if(u)cp.spy=true}
  if(ok("drone")&&eRem.M>0){const u=d==0?Math.random()<.1:d==1?(kn.M.length>0&&Math.random()<.5):true;if(u)cp.drone=true}
  if(ok("camo")){const u=d==0?false:d==1?Math.random()<.2:(t>=4&&Math.random()<.3);if(u)cp.camo=true}
- if(ok("radar")&&eRem.R>0){const u=d==0?(t==20&&Math.random()<.5):d==1?t==19:t==18;if(u)cp.radar=true}
+ if(ok("radar")&&eRem.R>0){const u=d==0?(t==20&&Math.random()<.5):d==1?(G.easy?Math.random()<.3:t==19):t==18;if(u)cp.radar=true}
  if(ok("sat")){const u=d==0?(t==20&&Math.random()<.5):d==1?Math.random()<.5:t==19;if(u)cp.sat=true}
  /* 轟炸機 */
  if(ok("bomb")){let best=null,bs=-1;
